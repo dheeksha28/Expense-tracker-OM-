@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import useLocalStorage from "./hooks/useLocalStorage";
 import useToday from "./hooks/useToday";
 import { SEED, CARDS, USER } from "./utils/constants";
-import Ico from "./components/Icon";
+import Icon from "./components/Icon";
 import Welcome from "./components/Welcome";
 import Home from "./components/Home";
 import Stats from "./components/Stats";
@@ -12,32 +12,53 @@ import AddSheet from "./components/AddSheet";
 import AddCardSheet from "./components/AddCardSheet";
 
 export default function App() {
-  const [started, setStarted] = useState(false);
-  const [tab, setTab] = useState("home");
-  const [adding, setAdding] = useState(false);
-  const [addingCard, setAddingCard] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [activeTab, setActiveTab] = useState("home");
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const [isAddingCard, setIsAddingCard] = useState(false);
 
-  const today = useToday();                      // e.g. "2026-11-11", updates itself at midnight
-  const thisMonth = today.slice(0, 7);           // "2026-11"
+  const today = useToday();               // e.g. "2026-11-11", updates itself at midnight
+  const currentMonth = today.slice(0, 7); // "2026-11"
 
   // saved in localStorage
   const [expenses, setExpenses] = useLocalStorage("expenses", SEED);
   const [cards, setCards] = useLocalStorage("cards", CARDS);
 
   // derived data
-  const spentBy = useMemo(() => {
-    const m = {};
-    expenses.forEach((e) => { m[e.cardId] = (m[e.cardId] || 0) + e.amount; });
-    return m;
+  const spentByCard = useMemo(() => {
+    const totals = {};
+    expenses.forEach((expense) => {
+      totals[expense.cardId] = (totals[expense.cardId] || 0) + expense.amount;
+    });
+    return totals;
   }, [expenses]);
-  const spentAll = Object.values(spentBy).reduce((s, v) => s + v, 0);
-  const openingAll = cards.reduce((s, c) => s + c.opening, 0);
-  const monthList = expenses.filter((e) => e.date.startsWith(thisMonth));
-  const monthSpent = monthList.reduce((s, e) => s + e.amount, 0);
 
-  const tabBtn = (k, label) => (
-    <button className={"tab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>
-      <Ico n={k} />{label}
+  const totalSpent = Object.values(spentByCard).reduce((sum, amount) => sum + amount, 0);
+  const totalOpeningBalance = cards.reduce((sum, card) => sum + card.opening, 0);
+  const monthExpenses = expenses.filter((expense) => expense.date.startsWith(currentMonth));
+  const monthSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+  const handleDeleteExpense = (id) => {
+    setExpenses((prev) => prev.filter((expense) => expense.id !== id));
+  };
+
+  const handleAddExpense = (newExpense) => {
+    setExpenses((prev) => [newExpense, ...prev]);
+    setIsAddingExpense(false);
+  };
+
+  const handleAddCard = (newCard) => {
+    setCards((prev) => [...prev, newCard]);
+    setIsAddingCard(false);
+  };
+
+  const renderTabButton = (tabKey, label) => (
+    <button
+      className={"tab" + (activeTab === tabKey ? " on" : "")}
+      onClick={() => setActiveTab(tabKey)}
+    >
+      <Icon name={tabKey} />
+      {label}
     </button>
   );
 
@@ -45,37 +66,56 @@ export default function App() {
     <div className="app">
       <div className="scroll">
         <div className="content">
-          {tab === "home" && (
-            <Home user={USER} expenses={expenses} todayStr={today} spentAll={spentAll} openingAll={openingAll}
-              monthSpent={monthSpent} monthCount={monthList.length} go={setTab} />
+          {activeTab === "home" && (
+            <Home
+              user={USER}
+              expenses={expenses}
+              todayStr={today}
+              spentAll={totalSpent}
+              openingAll={totalOpeningBalance}
+              monthSpent={monthSpent}
+              monthCount={monthExpenses.length}
+              go={setActiveTab}
+            />
           )}
-          {tab === "cards" && <Cards cards={cards} spentBy={spentBy} onAdd={() => setAddingCard(true)} />}
-          {tab === "stats" && <Stats expenses={expenses} thisMonth={thisMonth} />}
-          {tab === "history" && (
-            <History expenses={expenses} onDelete={(id) => setExpenses((prev) => prev.filter((e) => e.id !== id))} />
+          {activeTab === "cards" && (
+            <Cards cards={cards} spentBy={spentByCard} onAdd={() => setIsAddingCard(true)} />
+          )}
+          {activeTab === "stats" && <Stats expenses={expenses} thisMonth={currentMonth} />}
+          {activeTab === "history" && (
+            <History expenses={expenses} onDelete={handleDeleteExpense} />
           )}
         </div>
       </div>
 
       <nav className="nav">
-        {tabBtn("home", "Home")}
-        {tabBtn("cards", "Cards")}
-        <button className="fab" onClick={() => setAdding(true)} aria-label="Add expense">
-          <Ico n="plus" s={26} w={2} />
+        {renderTabButton("home", "Home")}
+        {renderTabButton("cards", "Cards")}
+        <button
+          className="fab"
+          onClick={() => setIsAddingExpense(true)}
+          aria-label="Add expense"
+        >
+          <Icon name="plus" size={26} strokeWidth={2} />
         </button>
-        {tabBtn("stats", "Stats")}
-        {tabBtn("history", "History")}
+        {renderTabButton("stats", "Stats")}
+        {renderTabButton("history", "History")}
       </nav>
 
-      {addingCard && (
-        <AddCardSheet holder={USER}
-          onAdd={(c) => { setCards((prev) => [...prev, c]); setAddingCard(false); }}
-          onClose={() => setAddingCard(false)} />
+      {isAddingCard && (
+        <AddCardSheet
+          holder={USER}
+          onAdd={handleAddCard}
+          onClose={() => setIsAddingCard(false)}
+        />
       )}
-      {adding && (
-        <AddSheet cards={cards} today={today}
-          onAdd={(ex) => { setExpenses((prev) => [ex, ...prev]); setAdding(false); }}
-          onClose={() => setAdding(false)} />
+      {isAddingExpense && (
+        <AddSheet
+          cards={cards}
+          today={today}
+          onAdd={handleAddExpense}
+          onClose={() => setIsAddingExpense(false)}
+        />
       )}
     </div>
   );
@@ -83,7 +123,7 @@ export default function App() {
   return (
     <div className="shell">
       <main className="frame">
-        {started ? appScreen : <Welcome onStart={() => setStarted(true)} />}
+        {hasStarted ? appScreen : <Welcome onStart={() => setHasStarted(true)} />}
       </main>
     </div>
   );

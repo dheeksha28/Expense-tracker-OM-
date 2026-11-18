@@ -1,85 +1,181 @@
 import { useState, useMemo } from "react";
-import Ico from "./Icon";
+import Icon from "./Icon";
 import { inr, monthLabel } from "../utils/expenseUtils";
 
+// size of the bar chart's drawing area (SVG units)
+const CHART_WIDTH = 300;
+const CHART_HEIGHT = 120;
+const GRID_LINES = [0, 0.5, 1];
+const FIXED_DAY_LABELS = [1, 5, 10, 15, 20, 25];
+
 export default function Stats({ expenses, thisMonth }) {
-  const [month, setMonth] = useState(thisMonth);
+  const [selectedMonth, setSelectedMonth] = useState(thisMonth);
 
   // months come from the data, so new months appear by themselves
-  const keys = useMemo(
-    () => [...new Set([thisMonth, ...expenses.map((e) => e.date.slice(0, 7))])].sort(),
+  const availableMonths = useMemo(
+    () =>
+      [
+        ...new Set([thisMonth, ...expenses.map((expense) => expense.date.slice(0, 7))]),
+      ].sort(),
     [expenses, thisMonth]
   );
-  const idx = keys.indexOf(month);
+  const selectedMonthIndex = availableMonths.indexOf(selectedMonth);
 
-  // useMemo: caches the grouping work until expenses or month change
-  const d = useMemo(() => {
-    const list = expenses.filter((e) => e.date.startsWith(month));
-    const days = new Date(+month.slice(0, 4), +month.slice(5), 0).getDate();
-    const perDay = Array(days).fill(0);
-    const perCat = {};
-    list.forEach((e) => {
-      perDay[+e.date.slice(8) - 1] += e.amount;
-      perCat[e.category] = (perCat[e.category] || 0) + e.amount;
+  // useMemo: caches the grouping work until expenses or selectedMonth change
+  const monthStats = useMemo(() => {
+    const monthExpenses = expenses.filter((expense) =>
+      expense.date.startsWith(selectedMonth)
+    );
+
+    // day 0 of the next month = last day of this month
+    const year = Number(selectedMonth.slice(0, 4));
+    const monthNumber = Number(selectedMonth.slice(5)); // 1-12
+    const daysInMonth = new Date(year, monthNumber, 0).getDate();
+
+    const spentPerDay = Array(daysInMonth).fill(0);
+    const spentPerCategory = {};
+
+    monthExpenses.forEach((expense) => {
+      const dayOfMonth = Number(expense.date.slice(8));
+      spentPerDay[dayOfMonth - 1] += expense.amount;
+      spentPerCategory[expense.category] =
+        (spentPerCategory[expense.category] || 0) + expense.amount;
     });
-    return { perDay, perCat, total: list.reduce((s, e) => s + e.amount, 0) };
-  }, [expenses, month]);
 
-  const max = Math.max(...d.perDay, 1);
-  const W = 300, H = 120;
-  const bw = W / d.perDay.length;
-  const peak = d.perDay.indexOf(Math.max(...d.perDay));
+    const totalSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+    return { spentPerDay, spentPerCategory, totalSpent };
+  }, [expenses, selectedMonth]);
+
+  const { spentPerDay, spentPerCategory, totalSpent } = monthStats;
+
+  const highestDaySpend = Math.max(...spentPerDay);
+  const chartMaxValue = Math.max(highestDaySpend, 1); // avoid dividing by zero
+  const barSlotWidth = CHART_WIDTH / spentPerDay.length;
+  const peakDayIndex = spentPerDay.indexOf(highestDaySpend);
+  const dayLabels = [...FIXED_DAY_LABELS, spentPerDay.length];
+
+  const goToPreviousMonth = () => {
+    if (selectedMonthIndex > 0) setSelectedMonth(availableMonths[selectedMonthIndex - 1]);
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonthIndex < availableMonths.length - 1) {
+      setSelectedMonth(availableMonths[selectedMonthIndex + 1]);
+    }
+  };
+
+  const categoriesBiggestFirst = Object.entries(spentPerCategory).sort(
+    ([, amountA], [, amountB]) => amountB - amountA
+  );
 
   return (
     <>
-      <div className="top"><h1>Statistics</h1></div>
+      <div className="top">
+        <h1>Statistics</h1>
+      </div>
 
       <div className="cols">
+        {/* LEFT COLUMN: month picker + daily bar chart */}
         <div className="col">
           <div className="panel">
             <div className="months">
-              <button onClick={() => idx > 0 && setMonth(keys[idx - 1])} aria-label="Previous month">‹</button>
-              <b>{monthLabel(month)}</b>
-              <button onClick={() => idx < keys.length - 1 && setMonth(keys[idx + 1])} aria-label="Next month">›</button>
+              <button onClick={goToPreviousMonth} aria-label="Previous month">
+                ‹
+              </button>
+              <b>{monthLabel(selectedMonth)}</b>
+              <button onClick={goToNextMonth} aria-label="Next month">
+                ›
+              </button>
             </div>
 
             <div className="lbl">Spent this month</div>
-            <div className="big" style={{ marginBottom: 10 }}>{inr(d.total)}</div>
+            <div className="big" style={{ marginBottom: 10 }}>
+              {inr(totalSpent)}
+            </div>
 
-            <svg viewBox={`0 0 ${W} ${H + 16}`} width="100%" role="img" aria-label="Spending per day">
-              {[0, 0.5, 1].map((g) => (
-                <line key={g} x1="0" x2={W} y1={H - g * H} y2={H - g * H} stroke="var(--line)" strokeDasharray="3 4" />
+            <svg
+              viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT + 16}`}
+              width="100%"
+              role="img"
+              aria-label="Spending per day"
+            >
+              {/* horizontal grid lines */}
+              {GRID_LINES.map((fraction) => (
+                <line
+                  key={fraction}
+                  x1="0"
+                  x2={CHART_WIDTH}
+                  y1={CHART_HEIGHT - fraction * CHART_HEIGHT}
+                  y2={CHART_HEIGHT - fraction * CHART_HEIGHT}
+                  stroke="var(--line)"
+                  strokeDasharray="3 4"
+                />
               ))}
-              {d.perDay.map((v, i) => (
-                <rect key={i} x={i * bw + 1.5} y={H - (v / max) * H} width={bw - 3}
-                  height={Math.max((v / max) * H, v ? 3 : 0)} rx="2.5"
-                  fill={i === peak && v ? "var(--accent)" : "var(--ink)"}
-                  opacity={v ? (i === peak ? 1 : 0.85) : 0.08} />
-              ))}
-              {[1, 5, 10, 15, 20, 25, d.perDay.length].map((n) => (
-                <text key={n} x={(n - 1) * bw + bw / 2} y={H + 13} fontSize="9" textAnchor="middle" fill="var(--mute)">{n}</text>
+
+              {/* one bar per day; the highest day is highlighted */}
+              {spentPerDay.map((amount, dayIndex) => {
+                const isPeakDay = dayIndex === peakDayIndex && amount > 0;
+                const barHeight = (amount / chartMaxValue) * CHART_HEIGHT;
+
+                return (
+                  <rect
+                    key={dayIndex}
+                    x={dayIndex * barSlotWidth + 1.5}
+                    y={CHART_HEIGHT - barHeight}
+                    width={barSlotWidth - 3}
+                    height={Math.max(barHeight, amount ? 3 : 0)}
+                    rx="2.5"
+                    fill={isPeakDay ? "var(--accent)" : "var(--ink)"}
+                    opacity={amount ? (isPeakDay ? 1 : 0.85) : 0.08}
+                  />
+                );
+              })}
+
+              {/* day numbers under the chart */}
+              {dayLabels.map((dayNumber) => (
+                <text
+                  key={dayNumber}
+                  x={(dayNumber - 1) * barSlotWidth + barSlotWidth / 2}
+                  y={CHART_HEIGHT + 13}
+                  fontSize="9"
+                  textAnchor="middle"
+                  fill="var(--mute)"
+                >
+                  {dayNumber}
+                </text>
               ))}
             </svg>
 
             <p className="lbl" style={{ marginTop: 6 }}>
-              {d.total ? `Highest day: day ${peak + 1} (${inr(d.perDay[peak])})` : "No spending this month."}
+              {totalSpent
+                ? `Highest day: day ${peakDayIndex + 1} (${inr(highestDaySpend)})`
+                : "No spending this month."}
             </p>
           </div>
         </div>
 
+        {/* RIGHT COLUMN: spending by category */}
         <div className="col">
-          <div className="sec"><h2>By category</h2></div>
+          <div className="sec">
+            <h2>By category</h2>
+          </div>
           <div className="list">
-            {Object.entries(d.perCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => (
-              <div className="cat" key={c}>
+            {categoriesBiggestFirst.map(([category, amount]) => (
+              <div className="cat" key={category}>
                 <div className="row">
-                  <span className="ico" style={{ width: 36, height: 36, borderRadius: 11 }}><Ico n={c} s={18} /></span>
-                  {c}<b>{inr(v)}</b>
+                  <span className="ico" style={{ width: 36, height: 36, borderRadius: 11 }}>
+                    <Icon name={category} size={18} />
+                  </span>
+                  {category}
+                  <b>{inr(amount)}</b>
                 </div>
-                <div className="prog" style={{ marginTop: 0 }}><i style={{ width: `${(v / d.total) * 100}%` }} /></div>
+                <div className="prog" style={{ marginTop: 0 }}>
+                  <i style={{ width: `${(amount / totalSpent) * 100}%` }} />
+                </div>
               </div>
             ))}
-            {!d.total && <div className="empty">No expenses in this month.</div>}
+            {!totalSpent && <div className="empty">No expenses in this month.</div>}
           </div>
         </div>
       </div>

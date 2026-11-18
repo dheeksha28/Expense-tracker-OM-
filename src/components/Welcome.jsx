@@ -1,43 +1,82 @@
 import { useState } from "react";
-import Ico from "./Icon";
+import Icon from "./Icon";
 
 const SLIDES = [
-  { icon: "cards", title: "Welcome to Money Saver", text: "Track every rupee you spend, in one simple place.", tags: ["Expenses", "Balance", "Cards"] },
-  { icon: "stats", title: "See where your money goes", text: "Clear charts show your spending day by day and category by category.", tags: ["Daily bars", "Categories"] },
-  { icon: "history", title: "Stay in control", text: "Search, filter and review your history. Your data stays saved on this device.", tags: ["Search", "Filter", "Saved"] },
+  {
+    icon: "cards",
+    title: "Welcome to Money Saver",
+    text: "Track every rupee you spend, in one simple place.",
+    tags: ["Expenses", "Balance", "Cards"],
+  },
+  {
+    icon: "stats",
+    title: "See where your money goes",
+    text: "Clear charts show your spending day by day and category by category.",
+    tags: ["Daily bars", "Categories"],
+  },
+  {
+    icon: "history",
+    title: "Stay in control",
+    text: "Search, filter and review your history. Your data stays saved on this device.",
+    tags: ["Search", "Filter", "Saved"],
+  },
 ];
 
 export default function Welcome({ onStart }) {
-  const [step, setStep] = useState(0);
-  const last = step === SLIDES.length - 1;
-  const s = SLIDES[step];
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const isLastSlide = currentStep === SLIDES.length - 1;
+  const currentSlide = SLIDES[currentStep];
+
+  const handleNext = () => {
+    if (isLastSlide) {
+      onStart();
+    } else {
+      setCurrentStep(currentStep + 1);
+    }
+  };
 
   return (
     <div className="welcome">
       <div className="wtop">
         <b>Money Saver</b>
-        {!last && <button className="skip" onClick={onStart}>Skip</button>}
+        {!isLastSlide && (
+          <button className="skip" onClick={onStart}>
+            Skip
+          </button>
+        )}
       </div>
 
-      {/* key={step} makes React rebuild this block on every slide, so the animation plays again */}
-      <div className="wbody" key={step}>
-        <div className="wicon"><Ico n={s.icon} s={56} w={1.4} /></div>
-        <h1>{s.title}</h1>
-        <p>{s.text}</p>
+      {/* key={currentStep} makes React rebuild this block on every slide, so the animation plays again */}
+      <div className="wbody" key={currentStep}>
+        <div className="wicon">
+          <Icon name={currentSlide.icon} size={56} strokeWidth={1.4} />
+        </div>
+        <h1>{currentSlide.title}</h1>
+        <p>{currentSlide.text}</p>
         <div className="tags">
-          {s.tags.map((t) => <span className="tag" key={t}>{t}</span>)}
+          {currentSlide.tags.map((tag) => (
+            <span className="tag" key={tag}>
+              {tag}
+            </span>
+          ))}
         </div>
       </div>
 
+      {/* one dot per slide; clicking a dot jumps to that slide */}
       <div className="dots">
-        {SLIDES.map((_, i) => (
-          <button key={i} className={"dot" + (i === step ? " on" : "")}
-            onClick={() => setStep(i)} aria-label={"Go to slide " + (i + 1)} />
+        {SLIDES.map((slide, slideIndex) => (
+          <button
+            key={slide.title}
+            className={"dot" + (slideIndex === currentStep ? " on" : "")}
+            onClick={() => setCurrentStep(slideIndex)}
+            aria-label={"Go to slide " + (slideIndex + 1)}
+          />
         ))}
       </div>
 
-      <button className="btn" onClick={() => (last ? onStart() : setStep(step + 1))}>
-        {last ? "Get started" : "Next"}
+      <button className="btn" onClick={handleNext}>
+        {isLastSlide ? "Get started" : "Next"}
       </button>
     </div>
   );

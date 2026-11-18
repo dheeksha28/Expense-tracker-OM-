@@ -1,61 +1,116 @@
 import { useState, useRef, useEffect } from "react";
 
+const NETWORKS = ["Visa", "Mastercard"];
+
 export default function AddCardSheet({ holder, onAdd, onClose }) {
-  const ref = useRef(null);
-  const [f, setF] = useState({ holder, number: "", expiry: "", network: "Visa", opening: "" });
-  const [errs, setErrs] = useState({});
+  const holderInputRef = useRef(null); // direct access to the card holder input
 
-  useEffect(() => { ref.current.focus(); }, []);
-  const set = (k, v) => setF((prev) => ({ ...prev, [k]: v }));
+  const [formData, setFormData] = useState({
+    holder,
+    number: "",
+    expiry: "",
+    network: "Visa",
+    opening: "",
+  });
+  const [errors, setErrors] = useState({});
 
-  const submit = () => {
-    const digits = f.number.replace(/\D/g, "");          // keep only the digits
-    const e = {};
-    if (!f.holder.trim()) e.holder = "Enter the card holder name.";
-    if (digits.length !== 16) e.number = "Card number must have 16 digits.";
-    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(f.expiry)) e.expiry = "Use MM/YY, for example 08/29.";
-    if (!f.opening || +f.opening <= 0) e.opening = "Opening balance must be greater than 0.";
-    setErrs(e);
-    if (!Object.keys(e).length) {
+  // focus the first input once when the sheet opens
+  useEffect(() => {
+    holderInputRef.current.focus();
+  }, []);
+
+  // functional update + new object (no mutation)
+  const updateField = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const validate = (cardDigits) => {
+    const newErrors = {};
+    if (!formData.holder.trim()) {
+      newErrors.holder = "Enter the card holder name.";
+    }
+    if (cardDigits.length !== 16) {
+      newErrors.number = "Card number must have 16 digits.";
+    }
+    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(formData.expiry)) {
+      newErrors.expiry = "Use MM/YY, for example 08/29.";
+    }
+    if (!formData.opening || Number(formData.opening) <= 0) {
+      newErrors.opening = "Opening balance must be greater than 0.";
+    }
+    return newErrors;
+  };
+
+  const handleSubmit = () => {
+    const cardDigits = formData.number.replace(/\D/g, ""); // keep only the digits
+    const newErrors = validate(cardDigits);
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length === 0) {
       onAdd({
         id: Date.now(),
-        holder: f.holder.trim(),
-        number: digits.replace(/(\d{4})(?=\d)/g, "$1 "),  // 1234567890123456 -> 1234 5678 9012 3456
-        expiry: f.expiry,
-        network: f.network,
-        opening: +f.opening,
+        holder: formData.holder.trim(),
+        number: cardDigits.replace(/(\d{4})(?=\d)/g, "$1 "), // 1234567890123456 -> 1234 5678 9012 3456
+        expiry: formData.expiry,
+        network: formData.network,
+        opening: Number(formData.opening),
       });
     }
   };
 
   return (
     <div className="mask" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      {/* stopPropagation: clicking inside the sheet should not close it */}
+      <div className="sheet" onClick={(event) => event.stopPropagation()}>
         <h2 style={{ marginBottom: 8 }}>Add card</h2>
 
         <label>Card holder</label>
-        <input ref={ref} value={f.holder} onChange={(e) => set("holder", e.target.value)} />
-        {errs.holder && <p className="err">{errs.holder}</p>}
+        <input
+          ref={holderInputRef}
+          value={formData.holder}
+          onChange={(event) => updateField("holder", event.target.value)}
+        />
+        {errors.holder && <p className="err">{errors.holder}</p>}
 
         <label>Card number</label>
-        <input inputMode="numeric" value={f.number} onChange={(e) => set("number", e.target.value)} placeholder="1234 5678 9012 3456" />
-        {errs.number && <p className="err">{errs.number}</p>}
+        <input
+          inputMode="numeric"
+          value={formData.number}
+          onChange={(event) => updateField("number", event.target.value)}
+          placeholder="1234 5678 9012 3456"
+        />
+        {errors.number && <p className="err">{errors.number}</p>}
 
         <label>Expiry (MM/YY)</label>
-        <input value={f.expiry} onChange={(e) => set("expiry", e.target.value)} placeholder="08/29" />
-        {errs.expiry && <p className="err">{errs.expiry}</p>}
+        <input
+          value={formData.expiry}
+          onChange={(event) => updateField("expiry", event.target.value)}
+          placeholder="08/29"
+        />
+        {errors.expiry && <p className="err">{errors.expiry}</p>}
 
         <label>Network</label>
-        <select value={f.network} onChange={(e) => set("network", e.target.value)}>
-          <option>Visa</option>
-          <option>Mastercard</option>
+        <select
+          value={formData.network}
+          onChange={(event) => updateField("network", event.target.value)}
+        >
+          {NETWORKS.map((network) => (
+            <option key={network}>{network}</option>
+          ))}
         </select>
 
         <label>Opening balance (₹)</label>
-        <input type="number" value={f.opening} onChange={(e) => set("opening", e.target.value)} placeholder="25000" />
-        {errs.opening && <p className="err">{errs.opening}</p>}
+        <input
+          type="number"
+          value={formData.opening}
+          onChange={(event) => updateField("opening", event.target.value)}
+          placeholder="25000"
+        />
+        {errors.opening && <p className="err">{errors.opening}</p>}
 
-        <button className="btn" onClick={submit}>Add card</button>
+        <button className="btn" onClick={handleSubmit}>
+          Add card
+        </button>
       </div>
     </div>
   );

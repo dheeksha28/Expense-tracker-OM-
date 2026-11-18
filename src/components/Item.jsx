@@ -1,17 +1,21 @@
-import Ico from "./Icon";
+import Icon from "./Icon";
 import { inr, fmt } from "../utils/expenseUtils";
 
-export default function Item({ e, onDelete }) {
+export default function Item({ expense, onDelete }) {
   return (
     <div className="item">
-      <div className="ico"><Ico n={e.category} /></div>
-      <div className="t">
-        <b>{e.title}</b>
-        <span>{fmt(e.date)}</span>
+      <div className="ico">
+        <Icon name={expense.category} />
       </div>
-      <div className="amt">−{inr(e.amount)}</div>
+      <div className="t">
+        <b>{expense.title}</b>
+        <span>{fmt(expense.date)}</span>
+      </div>
+      <div className="amt">−{inr(expense.amount)}</div>
       {onDelete && (
-        <button className="del" onClick={() => onDelete(e.id)}>Delete</button>
+        <button className="del" onClick={() => onDelete(expense.id)}>
+          Delete
+        </button>
       )}
     </div>
   );
